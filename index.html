@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ToutouTrack - Bluetooth GPS</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 20px; text-align: center; background-color: #f8f9fa; }
+    #map { height: 450px; width: 100%; margin: 20px 0; border: 2px solid #2c3e50; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+    .btn { padding: 12px 20px; margin: 5px; cursor: pointer; font-weight: bold; border: none; border-radius: 8px; transition: 0.3s; font-size: 14px; }
+    
+    /* Couleurs des boutons */
+    .btn-connect { background-color: #3498db; color: white; width: 80%; max-width: 300px; margin-bottom: 20px; }
+    .btn-action { background-color: #ecf0f1; color: #2c3e50; border: 1px solid #bdc3c7; }
+    .btn-action:active { background-color: #2ecc71; color: white; }
+    .btn-logout { background-color: #95a5a6; color: white; float: right; }
+    
+    .status { font-size: 0.9em; color: #7f8c8d; margin-top: 5px; }
+  </style>
+</head>
+<body>
+
+<button class="btn btn-logout" onclick="logout()">Déconnexion</button>
+<h1 style="color: #2c3e50;">GPS Hunter : Mijoux</h1>
+
+<button class="btn btn-connect" id="connectBtn" onclick="connectBT()">🔗 CONNECTER LE COLLIER</button>
+<div id="status" class="status">Statut : Non connecté</div>
+
+<div id="map"></div>
+
+<div class="controls">
+  <button class="btn btn-action" onclick="sendCmd(0xA1)">✨ FLASH (LED)</button>
+  <button class="btn btn-action" onclick="sendCmd(0xB2)">🔊 BUZZER (BIP)</button>
+</div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script>
+  // --- SÉCURITÉ ---
+  if (sessionStorage.getItem('authenticated') !== 'true') {
+    window.location.href = "login.html";
+  }
+
+  function logout() {
+    sessionStorage.removeItem('authenticated');
+    window.location.href = "login.html";
+  }
+
+  // --- CONFIGURATION BLUETOOTH (UUID) ---
+  // Ces UUID doivent être IDENTIQUES à ceux dans ton code ESP32
+  const SERVICE_UUID = "12345678-1234-1234-1234-123456789abc"; 
+  const CHARACTERISTIC_UUID = "abcd1234-ab12-cd34-ef56-abcdef123456";
+
+  let bleDevice, bleCharacteristic;
+
+  // --- LOGIQUE BLUETOOTH ---
+  async function connectBT() {
+    const statusDiv = document.getElementById('status');
+    const btn = document.getElementById('connectBtn');
+
+    try {
+      statusDiv.innerText = "Recherche de l'appareil...";
+      
+      // Demande de connexion avec filtrage UUID (Test ID 2 & 5)
+      bleDevice = await navigator.bluetooth.requestDevice({
+        filters: [{ services: [SERVICE_UUID] }]
+      });
+
+      statusDiv.innerText = "Connexion au serveur...";
+      const server = await bleDevice.gatt.connect();
+      
+      statusDiv.innerText = "Récupération du service...";
+      const service = await server.getPrimaryService(SERVICE_UUID);
+      bleCharacteristic = await service.getCharacteristic(CHARACTERISTIC_UUID);
+
+      statusDiv.innerText = "Connecté ✅";
+      statusDiv.style.color = "#2ecc71";
+      btn.innerText = "COLLIER CONNECTÉ";
+      btn.style.backgroundColor = "#2ecc71";
+
+      // Détection déconnexion (Test ID 4)
+      bleDevice.addEventListener('gattserverdisconnected', () => {
+        statusDiv.innerText = "Déconnecté ❌";
+        statusDiv.style.color = "#e74c3c";
+        btn.innerText = "RECONNECTER LE COLLIER";
+        btn.style.backgroundColor = "#e74c3c";
+      });
+
+    } catch (error) {
+      console.error(error);
+      statusDiv.innerText = "Erreur : " + error.message;
+    }
+  }
+
+  // Envoi des trames Hexadécimales (Test ID 5 & 6)
+  async function sendCmd(hexValue) {
+    if (!bleCharacteristic) {
+      alert("Erreur : Le collier n'est pas connecté en Bluetooth !");
+      return;
+    }
+
+    try {
+      // Conversion de la valeur numérique en octet (ex: 0xA1 -> [161])
+      const data = new Uint8Array([hexValue]);
+      await bleCharacteristic.writeValue(data);
+      console.log("Commande envoyée : 0x" + hexValue.toString(16).toUpperCase());
+    } catch (error) {
+      alert("Erreur lors de l'envoi : " + error.message);
+    }
+  }
+
+  // --- CARTE LEAFLET (OFFLINE) ---
+  var map = L.map('map').setView([46.36698, 5.99441], 14);
+
+  // Utilisation de ton dossier 'tiles'
+  L.tileLayer('tiles/{z}/{x}/{y}.png', {
+    minZoom: 14,
+    maxZoom: 18,
+    attribution: 'GPS Hunter - Mijoux',
+    errorTileUrl: './tiles/fallback.png'
+  }).addTo(map);
+
+  // Enregistrement du Service Worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js');
+  }
+</script>
+
+</body>
+</html>

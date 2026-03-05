@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Connexion</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background-color: #f0f0f0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+    }
+
+    .login-container {
+      background-color: #fff;
+      padding: 40px 30px;
+      border-radius: 10px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+      width: 300px;
+      text-align: center;
+    }
+
+    h2 {
+      margin-bottom: 25px;
+      color: #333;
+    }
+
+    input {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      box-sizing: border-box;
+      font-size: 14px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 10px;
+      margin-top: 15px;
+      border: none;
+      border-radius: 5px;
+      background-color: #C1C7C2;
+      color: white;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .btn:hover {
+      background-color: #45a049;
+    }
+
+    .error {
+      color: red;
+      margin-top: 10px;
+      display: none;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="login-container">
+  <h2>Connexion</h2>
+
+  <input type="text" id="username" placeholder="Utilisateur">
+  <input type="password" id="password" placeholder="Mot de passe">
+  <button class="btn" onclick="login()">Se connecter</button>
+
+  <div class="error" id="errorMsg">Identifiants incorrects</div>
+</div>
+
+<script>
+let db;
+
+// Initialisation de la base IndexedDB
+const request = indexedDB.open("MyDB", 1);
+
+request.onupgradeneeded = function(event) {
+  db = event.target.result;
+  const store = db.createObjectStore("users", { keyPath: "username" });
+  store.createIndex("password", "password", { unique: false });
+  store.add({ username: "admin", password: "1234" });
+};
+
+request.onsuccess = function(event) {
+  db = event.target.result;
+};
+
+// Fonction login avec IndexedDB
+function login() {
+  const username = document.getElementById("username").value.trim();
+  const password = document.getElementById("password").value.trim();
+  const errorMsg = document.getElementById("errorMsg");
+
+  const transaction = db.transaction(["users"], "readonly");
+  const store = transaction.objectStore("users");
+  const getRequest = store.get(username);
+
+  getRequest.onsuccess = function() {
+    const user = getRequest.result;
+    if (user && user.password === password) {
+      sessionStorage.setItem('authenticated', 'true');
+      window.location.href = "index.html";
+    } else {
+      errorMsg.style.display = "block";
+    }
+  };
+
+  getRequest.onerror = function() {
+    errorMsg.textContent = "Erreur base de données";
+    errorMsg.style.display = "block";
+  };
+}
+</script>
+
+</body>
+</html>
